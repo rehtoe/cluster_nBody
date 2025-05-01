@@ -25,17 +25,27 @@ private:
 
 struct Cluster{
 /*
-    mean:
+    mean: _x, _y
         center of the cluster where it is the closest to each point inside the cluster
-    centerOfMass:
+    cm (centerOfMass):  _x, _y
         center of mass of the cluster, used for calculating
         gravity exerted on other clusters
         also made an equation to determine the acceleration without a specific particle internally
-    velocity:
+    velocity: _x, _y
         velocity the cluster experiences due to other clusters
+    totalMass: 
+        total amount of mass in the cluster for intercluster gravitational calculations
+        change values when adding or removing a particle
     particles:
         data structure that holds all of the particles within this specific cluster
-
+    inertia:
+        calculates the inertia by summing up the distances squared of all particles in the cluster
+    addParticle:
+        adds a particle to this cluster as a membership
+    hasParticle:
+        checks if a particle is a member of cluster
+    remParticle:
+        removes the particle if it is a member of this cluster
 */
     float mean_x;
     float mean_y;
@@ -47,6 +57,9 @@ struct Cluster{
     std::vector<Particle*> particles;
     
     float inertia();
+    void addParticle(Particle& refParticle);
+    bool hasParticle(Particle& refParticle);
+    void remParticle(Particle& refParticle);
 
     Cluster(): mean_x(0.0f), mean_y(0.0f), cm_x(0.0f), cm_y(0.0f), vx(0.0f), vy(0.0f), totalMass(1.0f), particles(std::vector<Particle*>()) {};
 private:
@@ -112,6 +125,7 @@ struct SimulationParams{
     int resolutionHeight = 1080;
     float pixelScale = 1.2f;
     float maxForce = 1000.0f;
+    float softening = 10.0f;
 };
 
 class ParticleSimulation{
