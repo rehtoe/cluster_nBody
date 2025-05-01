@@ -1,14 +1,24 @@
 #include "n_vector.h"
 
+#include <random>
+#include <algorithm>
+
+float getRandomFloat(float min, float max);
+
+std::vector<float> generateRandomFloats(float min, float max, size_t count);
+
 struct Particle{
-    nVec position;
-    nVec velocity;
+    float x;
+    float y;
+    float vx;
+    float vy;
     float mass;
-    nVec color;
+    int red;
+    int green;
+    int blue;
     float visualRadius;
 
-    Particle(): position(nVec(2)), velocity(nVec(2)), mass(1.0f), color(nVec(3)), visualRadius(1.0f) {};
-    Particle(int dimensions): position(nVec(dimensions)), velocity(nVec(dimensions)), mass(1.0f), color(nVec(3)), visualRadius(1.0f) {};
+    Particle(): x(0.0f), y(0.0f), vx(0.0f), vy(0.0f), mass(1.0f), red(255), blue(255), green(255), visualRadius(1.0f) {};
 
 private:
 };
@@ -27,25 +37,34 @@ struct Cluster{
         data structure that holds all of the particles within this specific cluster
 
 */
-    nVec mean;
-    nVec centerOfMass;
-    nVec velocity;
+    float mean_x;
+    float mean_y;
+    float cm_x;
+    float cm_y;
+    float vx;
+    float vy;
     float totalMass;
-    std::vector<Particle&> particles;
+    std::vector<Particle*> particles;
     
-    Cluster(): position(nVec(2)), centerOfMass(nVec(2)), velocity(nVec(2)), totalMass(1.0f), particles(std::vector<Particle&>()) {};
-    Cluster(int dimensions): position(nVec(dimensions)), centerOfMass(nVec(dimensions)), velocity(nVec(dimensions)), totalMass(1.0f), particles(std::vector<Particle&>()) {};
+    float inertia();
+
+    Cluster(): mean_x(0.0f), mean_y(0.0f), cm_x(0.0f), cm_y(0.0f), vx(0.0f), vy(0.0f), totalMass(1.0f), particles(std::vector<Particle*>()) {};
 private:
+};
+
+enum class ClusteringType{
+    k_means = 1,
+    fuzzy_k_means = 2
 };
 
 struct SimulationParams{
 /*
-    dimensions:
-        Default to 2, want to implement n dimensions, using nVec
     particleCount:
         Amount of particles for the simulation to start with
     clusterCount:
         amount of clusters to generate
+    clusterStarts:
+        amount of different iterations/ intial means to test for convergence in cluster initializations
     steps:
         Amount of frames/steps the simulation will run for, # of images saved
     timeScale:
@@ -76,9 +95,10 @@ struct SimulationParams{
         max force allowed, 
         use to calculate max velocity based off mass
 */
-    int dimensions = 2;
+    ClusteringType clusterAlgorithm = ClusteringType::k_means;
     int particleCount = 500;
     int clusterCount = 4;
+    int clusterStarts = 25;
     int steps = 300;
     float timeScale = 1.0f;
     int fps = 30;
@@ -91,7 +111,7 @@ struct SimulationParams{
     int resolutionWidth = 1920;
     int resolutionHeight = 1080;
     float pixelScale = 1.2f;
-    float maxForce = 1000.0f
+    float maxForce = 1000.0f;
 };
 
 class ParticleSimulation{
@@ -113,7 +133,7 @@ class ParticleSimulation{
                 random positions and mass based of parameters
         (float): adds a particle of [mass] in a random positions,
                 based off the parameters
-        (float, nVec): adds a particle of [mass] in [nvec] position,
+        (float, float, float): adds a particle of [mass] in [x, y] position,
 
     createClusters:
         creates the clusters based of clusterCount in parameters
@@ -152,16 +172,18 @@ class ParticleSimulation{
     std::vector<Cluster> clusters;
     SimulationParams parameters;
 
+    ParticleSimulation(SimulationParams params): particles(std::vector<Particle>(params.particleCount)), 
+        clusters(std::vector<Cluster>(params.clusterCount)), parameters(params){};
     std::vector<std::vector<int>> km_membership;
     std::vector<std::vector<float>> fkm_uig;
 
     void addParticle(int amountOf);
     void addParticle(float mass);
-    void addParticle(float mass, nVec position);
+    void addParticle(float mass, float posi_x, float posi_y);
 
     void createClusters();
-    void optimizeClusters_kmeans()
-    void optimizeClusters_FKM()
+    void optimizeClusters_kmeans(std::vector<Cluster>& clusterVec);
+    void optimizeClusters_FKM(std::vector<Cluster>& clusterVec);
 
     void createDirectories();
     void runSim();
