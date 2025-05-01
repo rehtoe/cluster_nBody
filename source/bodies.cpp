@@ -70,7 +70,7 @@ void ParticleSimulation::createClusters() {
             converts them into ints and puts them into a vector
         */
         std::vector<float> ph_floats = generateRandomFloats(0, particles.size()-1, parameters.clusterCount);
-        std::vector<int> ph_ints(ph_floats.size());
+        std::vector<int> ph_ints;
         for(auto fl:ph_floats){ ph_ints.push_back(std::floor(fl)); }
         
         /*  sort the int vector is sorted least to greatest,
@@ -83,21 +83,25 @@ void ParticleSimulation::createClusters() {
             }
         }
 
-        /*  */
+        /*  setting 1 reference initialized cluster means
+            optimizing the clusters per ClusteringType    
+        */
         for(int i = 0; i < parameters.clusterCount; i++){
             Cluster ph_cluster;
             ph_cluster.mean_x = particles[ph_ints[i]].x; 
             ph_cluster.mean_y = particles[ph_ints[i]].y; 
             ph_clusters.push_back(ph_cluster);
         }
-
         if(parameters.clusterAlgorithm == ClusteringType::k_means){
             optimizeClusters_kmeans(ph_clusters);
         } else if(parameters.clusterAlgorithm == ClusteringType::fuzzy_k_means){
             optimizeClusters_FKM(ph_clusters);
         }
         
-        /*  */
+        /*  setting first converged clusters as clusters
+            comparing new iteration to current saved configuration
+            to check if it is more optimized
+        */
         if(starts == 0){
             for(auto cl:ph_clusters){
                 clusters.push_back(cl);
@@ -110,11 +114,18 @@ void ParticleSimulation::createClusters() {
                 ph_sum += ph_clusters[i].inertia();
             }
             if(ph_sum < ph_sum_curr){
+                /* free up memory of all particles in each cluster before replacing clusters */
+                for(auto cl_vec:clusters){ for(auto cl_ptr:cl_vec.particles){ delete cl_ptr; } }
+                clusters.clear();
                 for(auto cl:ph_clusters){
                     clusters.push_back(cl);
                 }
             }
         }
+
+        /* free up memory of all particles in ph_clusters before the next iteration of the loop */
+        for(auto cl_vec:ph_clusters){ for(auto cl_ptr:cl_vec.particles){ delete cl_ptr; } }
+        ph_clusters.clear();
     }
 }
 void ParticleSimulation::optimizeClusters_kmeans(std::vector<Cluster>& clusterVec) {}
