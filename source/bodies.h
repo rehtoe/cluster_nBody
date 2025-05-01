@@ -54,14 +54,16 @@ struct Cluster{
     float vx;
     float vy;
     float totalMass;
+    float radiusSqr;
     std::vector<Particle*> particles;
     
     float inertia();
     void addParticle(Particle& refParticle);
     bool hasParticle(Particle& refParticle);
     void remParticle(Particle& refParticle);
+    bool inBounds(Particle& refParticle);
 
-    Cluster(): mean_x(0.0f), mean_y(0.0f), cm_x(0.0f), cm_y(0.0f), vx(0.0f), vy(0.0f), totalMass(1.0f), particles(std::vector<Particle*>()) {};
+    Cluster(): mean_x(0.0f), mean_y(0.0f), cm_x(0.0f), cm_y(0.0f), vx(0.0f), vy(0.0f), totalMass(1.0f), radiusSqr(0.0f), particles(std::vector<Particle*>()) {};
 private:
 };
 
@@ -185,11 +187,10 @@ class ParticleSimulation{
     std::vector<Particle> particles;
     std::vector<Cluster> clusters;
     SimulationParams parameters;
+    std::vector<std::vector<float>> fkm_uig;
 
     ParticleSimulation(SimulationParams params): particles(std::vector<Particle>(params.particleCount)), 
         clusters(std::vector<Cluster>(params.clusterCount)), parameters(params){};
-    std::vector<std::vector<int>> km_membership;
-    std::vector<std::vector<float>> fkm_uig;
 
     void addParticle(int amountOf);
     void addParticle(float mass);

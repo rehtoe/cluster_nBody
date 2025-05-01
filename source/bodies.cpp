@@ -25,7 +25,11 @@ std::vector<float> generateRandomFloats(float min, float max, size_t count) {
 
 float Cluster::inertia(){
     float sum = 0.0f;
-    for(auto &p:particles){ sum += std::pow(mean_x-p->x,2) + std::pow(mean_y-p->y,2); }
+    for(auto &p:particles){
+        float dx = mean_x-p->x;
+        float dy = mean_y-p->y;
+        sum += dx*dx + dy*dy;
+    }
     return sum;
 }
 void Cluster::addParticle(Particle& refParticle){
@@ -45,6 +49,12 @@ void Cluster::remParticle(Particle& refParticle){
     else{
         particles.erase(std::remove(particles.begin(), particles.end(), &refParticle), particles.end());
     }
+}
+bool Cluster::inBounds(Particle& refParticle){
+    float dx = mean_x-refParticle.x;
+    float dy = mean_y-refParticle.y;
+    float distSqr = dx*dx + dy*dy;
+    return distSqr <= radiusSqr;
 }
 
 /* ParticleSimulation */
@@ -161,29 +171,36 @@ void ParticleSimulation::optimizeClusters_kmeans(std::vector<Cluster>& clusterVe
         /*  iterates over every particle in the ParticleSimulation
             makes a float array for distances to each cluster(same order)
             keeps track of the current 'i' and the 'smallest' distance indexes */
+        #pragma omp parallel for reduction(+:objective_curr)
         for(auto &parti : particles){
-            float cl_dist[clusterVec.size()];
-            int i = 0, smallest_val = 0;
+            float min_dist = 192837465000.0f, ph_dist = 0.0f;
+            int closest_cluster = 0;
             /*  calculates the distance from the particle to EVERY cluster mean
-                saves the index of the cluster in which the particle is closes to 
-                adds the particle to the cluster mean it is closest to
-                calculates and adds the objective value of the current iteration setup */
-            for(auto clstr:clusterVec){
-                cl_dist[i++] = std::sqrt(std::pow(clstr.mean_x-parti.x,2) + std::pow(clstr.mean_y-parti.y,2));
-                if(i-1 == smallest_val){ continue; }
-                if(cl_dist[i-1] < cl_dist[smallest_val]){ smallest_val = i-1; }
+                saves the index of the cluster in which the particle is closes to */
+            for (int i = 0; i < clusterVec.size(); i++) {
+                float dx_ = clusterVec[i].mean_x - parti.x;
+                float dy_ = clusterVec[i].mean_y - parti.y;
+                ph_dist = dx_*dx_ + dy_*dy_;
+                if (ph_dist < min_dist) {
+                    min_dist = ph_dist;
+                    closest_cluster = i;
+                }
             }
-            clusterVec[smallest_val].addParticle(parti);
-            objective_curr += std::abs(std::pow(clusterVec[smallest_val].mean_x-parti.x,2) + std::pow(clusterVec[smallest_val].mean_y-parti.y,2));
+            /*  adds the particle to the cluster mean it is closest to
+                calculates and adds the objective value(distance squared) of the current iteration setup */
+            clusterVec[closest_cluster].addParticle(parti);
+            objective_curr += min_dist;
+            clusterVec[closest_cluster].radiusSqr = std::max(clusterVec[closest_cluster].radiusSqr, min_dist);
         }
         /*  changes the means of the clusters based on the particles it contains
             averages all the x values and y values of all particles
             sets cluster's mean to the same cluster */
-        for(auto clstr:clusterVec){
+        for(auto &clstr:clusterVec){
+            if (clstr.particles.empty()){ continue; }
             float new_x = 0.0, new_y = 0.0;
             for(auto cl_parti:clstr.particles){ new_x += cl_parti->x; new_y += cl_parti->y; }
-            new_x/clstr.particles.size();
-            new_y/clstr.particles.size();
+            clstr.mean_x = new_x/clstr.particles.size();
+            clstr.mean_y = new_y/clstr.particles.size();
         }
         /*  uses calculated objective value to compare it to the previous
             when under the threshhold of objective_target breaks out of the loop
@@ -194,7 +211,6 @@ void ParticleSimulation::optimizeClusters_kmeans(std::vector<Cluster>& clusterVe
         else{ objective_prev = objective_curr; objective_curr = 0.0; }
         iters++;
     }
-
 }
 void ParticleSimulation::optimizeClusters_FKM(std::vector<Cluster>& clusterVec) {}
 
