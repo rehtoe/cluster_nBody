@@ -1,7 +1,14 @@
-#include "n_vector.h"
-
+#include <vector>
+#include <cmath>
+#include <bits/stdc++.h>
 #include <random>
 #include <algorithm>
+#include <string> 
+#include <fstream>
+#include <sstream>
+#include <map>
+
+namespace fs = std::filesystem;
 
 float getRandomFloat(float min, float max);
 
@@ -209,8 +216,10 @@ class ParticleSimulation{
     
     void renderStep();
     void saveFrame(int frameNumber);
-    std::string makeFilename();
-    void compileVideo(std::string filename);
+    std::string getFilenameID();
+    void compileVideo(std::string fileID);
+    void saveParameters(std::string fileID);
+    void loadParameters(std::string fileID);
     void clearFrames();
 
     private:

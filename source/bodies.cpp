@@ -60,8 +60,8 @@ bool Cluster::inBounds(Particle& refParticle){
 /* ParticleSimulation */
 
 void ParticleSimulation::addParticle(int amountOf) {
-    std::vector<float> posX = generateRandomFloats(parameters.width - parameters.width*parameters.bounds, parameters.width*parameters.bounds, amountOf);
-    std::vector<float> posY = generateRandomFloats(parameters.height - parameters.height*parameters.bounds, parameters.height*parameters.bounds, amountOf);
+    std::vector<float> posX = generateRandomFloats(0, parameters.width*parameters.bounds, amountOf);
+    std::vector<float> posY = generateRandomFloats(0, parameters.height*parameters.bounds, amountOf);
     std::vector<float> masses = generateRandomFloats(parameters.mass_lower, parameters.mass_upper, amountOf);
     for(int i = 0; i < amountOf; i++){
         Particle ph_part;
@@ -75,8 +75,8 @@ void ParticleSimulation::addParticle(int amountOf) {
 }
 void ParticleSimulation::addParticle(float mass) {
     Particle ph_part;
-    ph_part.x = getRandomFloat(parameters.width - parameters.width*parameters.bounds, parameters.width*parameters.bounds);
-    ph_part.y = getRandomFloat(parameters.height - parameters.height*parameters.bounds, parameters.height*parameters.bounds);
+    ph_part.x = getRandomFloat(0, parameters.width*parameters.bounds);
+    ph_part.y = getRandomFloat(0, parameters.height*parameters.bounds);
     ph_part.vx = 0;
     ph_part.vy = 0;
     ph_part.mass = mass;
@@ -214,7 +214,15 @@ void ParticleSimulation::optimizeClusters_kmeans(std::vector<Cluster>& clusterVe
 }
 void ParticleSimulation::optimizeClusters_FKM(std::vector<Cluster>& clusterVec) {}
 
-void ParticleSimulation::createDirectories() {}
+void ParticleSimulation::createDirectories() {
+    /*  frames:
+            subfolder where all the frames rendered are saved
+        sims:
+            subfolder where all the compiled videos are saved 
+    */
+    std::filesystem::create_directory("./frames/");
+    std::filesystem::create_directory("./sims/");
+}
 void ParticleSimulation::runSim() {}
 void ParticleSimulation::calculateForcesCluster() {}
 void ParticleSimulation::calculateForcesParticle() {}
@@ -223,6 +231,117 @@ void ParticleSimulation::stepParticle() {}
 
 void ParticleSimulation::renderStep() {}
 void ParticleSimulation::saveFrame(int frameNumber) {}
-std::string ParticleSimulation::makeFilename() { return ""; }
-void ParticleSimulation::compileVideo(std::string filename) {}
-void ParticleSimulation::clearFrames() {}
+std::string ParticleSimulation::getFilenameID() {
+    /*  setup an initial #0 simulation 
+        for each either [mp4 | txt] checks each one to get highest ID
+        sets ph_ID to the next ID to use, returns it.
+    */
+    int ph_id = 0;
+    for (const auto& entry : fs::directory_iterator("./sims/")) {
+        if (entry.is_regular_file() && entry.path().extension() == ".txt") {
+            std::string s = entry.path().filename();
+            size_t start = 0;
+            size_t end = s.find('_');
+            s = s.substr(start, end);
+            if(ph_id <= std::stoi(s)) { ph_id = std::stoi(s)+1; }
+        }
+    }
+    return std::to_string(ph_id); 
+}
+void ParticleSimulation::compileVideo(std::string fileID) {
+    /*  Format: ffmpeg -framerate 30 -start_number 0 -i "pathTo/picture%d.png" -c:v libx264 -pix_fmt yuv420p output.mp4
+        -framerate, sets fps
+        -start_number, starting number for %d which is numbered index, default is 1
+        -i, included files, %d represents a numberin ascending order, cant skip, like 0,1,2, 4
+        -c:v, video encoding, libx264 -> H.264 (universal)
+        -pix_fmt: format for color encoding, yuv420p, sampled method(not lossless) that is universal to players 
+    */
+    std::string video_command = (
+        "ffmpeg -framerate " + std::to_string(parameters.fps) +
+        " -start_number 0 -i ./frames/%d.png -c:v libx264 -pix_fmt yuv420p -y ./sims/" +
+        fileID + ".mp4"
+    );
+    system(video_command.c_str());
+}
+void ParticleSimulation::saveParameters(std::string fileID) {
+    /*  makes a map for the variables
+        initializes fileName for the new file
+    */
+    std::map<std::string, std::string> variable_map;
+    std::string fileName = "./sims/" + fileID + "_info.txt";
+    /*  maps the SimulationParams to the variable_map
+    */
+    variable_map["particleCount"] = std::to_string(parameters.particleCount);
+    variable_map["clusterCount"] = std::to_string(parameters.clusterCount);
+    variable_map["clusterStarts"] = std::to_string(parameters.clusterStarts);
+    variable_map["steps"] = std::to_string(parameters.steps);
+    variable_map["timeScale"] = std::to_string(parameters.timeScale);
+    variable_map["fps"] = std::to_string(parameters.fps);
+    variable_map["gravity"] = std::to_string(parameters.gravity);
+    variable_map["mass_lower"] = std::to_string(parameters.mass_lower);
+    variable_map["mass_upper"] = std::to_string(parameters.mass_upper);
+    variable_map["width"] = std::to_string(parameters.width);
+    variable_map["height"] = std::to_string(parameters.height);
+    variable_map["bounds"] = std::to_string(parameters.bounds);
+    variable_map["resolutionWidth"] = std::to_string(parameters.resolutionWidth);
+    variable_map["resolutionHeight"] = std::to_string(parameters.resolutionHeight);
+    variable_map["pixelScale"] = std::to_string(parameters.pixelScale);
+    variable_map["maxForce"] = std::to_string(parameters.maxForce);
+    variable_map["softening"] = std::to_string(parameters.softening);
+    /*  creates file @ filename, opens a output file stream
+        adds all the mapped variables as "variable_name,value"
+        closes file stream
+    */
+    std::ofstream newFile(fileName);
+    for(auto &var_pair:variable_map){
+        newFile << var_pair.first + "," + var_pair.second + '\n';
+    }
+    newFile.close();
+}
+void ParticleSimulation::loadParameters(std::string fileID) {
+    /*  initializes a map usd for the variables
+        initializes the fileName to load based off given fileID
+    */
+    std::map<std::string, std::string> variable_map;
+    std::string fileName = "./sims/" + fileID + "_info.txt";
+    std::ifstream file(fileName);
+    std::string line;
+    /*  map out the parameters to make the setting more easily readable
+    */
+    while (std::getline(file, line)) {
+        std::istringstream ss(line);
+        std::string key, value;
+
+        if (std::getline(ss, key, ',') && std::getline(ss, value)) {
+            variable_map[key] = value;
+        }
+    }
+    /*  setting each parameter to whatever config chosen/parsed previously
+    */
+    parameters.particleCount = std::stoi(variable_map["particleCount"]);
+    parameters.clusterCount = std::stoi(variable_map["clusterCount"]);
+    parameters.clusterStarts = std::stoi(variable_map["clusterStarts"]);
+    parameters.steps = std::stoi(variable_map["steps"]);
+    parameters.timeScale = std::stof(variable_map["timeScale"]);
+    parameters.fps = std::stoi(variable_map["fps"]);
+    parameters.gravity = std::stof(variable_map["gravity"]);
+    parameters.mass_lower = std::stof(variable_map["mass_lower"]);
+    parameters.mass_upper = std::stof(variable_map["mass_upper"]);
+    parameters.width = std::stof(variable_map["width"]);
+    parameters.height = std::stof(variable_map["height"]);
+    parameters.bounds = std::stof(variable_map["bounds"]);
+    parameters.resolutionWidth = std::stoi(variable_map["resolutionWidth"]);
+    parameters.resolutionHeight = std::stoi(variable_map["resolutionHeight"]);
+    parameters.pixelScale = std::stof(variable_map["pixelScale"]);
+    parameters.maxForce = std::stof(variable_map["maxForce"]);
+    parameters.softening = std::stof(variable_map["softening"]);
+}
+void ParticleSimulation::clearFrames() {
+    /*  Called after 'compileVideo()'
+            deletes all rendered frames
+            saves space, preps folder for next sim
+    */
+    for (const auto& entry : std::filesystem::directory_iterator("./frames/")) {
+        std::filesystem::remove(entry.path());
+    }
+}

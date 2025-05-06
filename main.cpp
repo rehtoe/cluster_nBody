@@ -1,3 +1,4 @@
+#include "source/n_vector.h"
 #include "source/bodies.h"
 #include <iostream>
 
