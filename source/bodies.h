@@ -7,6 +7,7 @@
 #include <fstream>
 #include <sstream>
 #include <map>
+#include <unordered_map>
 
 namespace fs = std::filesystem;
 
@@ -24,6 +25,8 @@ struct Particle{
     int green;
     int blue;
     float visualRadius;
+
+    int id;
 
     Particle(): x(0.0f), y(0.0f), vx(0.0f), vy(0.0f), mass(1.0f), red(255), blue(255), green(255), visualRadius(1.0f) {};
 
@@ -75,6 +78,7 @@ private:
 };
 
 enum class ClusteringType{
+    custom_0 = 0,
     k_means = 1,
     fuzzy_k_means = 2
 };
@@ -194,7 +198,6 @@ class ParticleSimulation{
     std::vector<Particle> particles;
     std::vector<Cluster> clusters;
     SimulationParams parameters;
-    std::vector<std::vector<float>> fkm_uig;
 
     ParticleSimulation(SimulationParams params): particles(std::vector<Particle>(params.particleCount)), 
         clusters(std::vector<Cluster>(params.clusterCount)), parameters(params){};
@@ -204,6 +207,7 @@ class ParticleSimulation{
     void addParticle(float mass, float posi_x, float posi_y);
 
     void createClusters();
+    void optimizeClusters_custom(std::vector<Cluster>& clusterVec);
     void optimizeClusters_kmeans(std::vector<Cluster>& clusterVec);
     void optimizeClusters_FKM(std::vector<Cluster>& clusterVec);
 

@@ -63,6 +63,7 @@ void ParticleSimulation::addParticle(int amountOf) {
     std::vector<float> posX = generateRandomFloats(0, parameters.width*parameters.bounds, amountOf);
     std::vector<float> posY = generateRandomFloats(0, parameters.height*parameters.bounds, amountOf);
     std::vector<float> masses = generateRandomFloats(parameters.mass_lower, parameters.mass_upper, amountOf);
+    int next_id = particles.size();
     for(int i = 0; i < amountOf; i++){
         Particle ph_part;
         ph_part.x = posX[i];
@@ -70,25 +71,30 @@ void ParticleSimulation::addParticle(int amountOf) {
         ph_part.vx = 0;
         ph_part.vy = 0;
         ph_part.mass = masses[i];
+        ph_part.id = next_id + i;
         particles.push_back(ph_part);
     }
 }
 void ParticleSimulation::addParticle(float mass) {
+    int next_id = particles.size();
     Particle ph_part;
     ph_part.x = getRandomFloat(0, parameters.width*parameters.bounds);
     ph_part.y = getRandomFloat(0, parameters.height*parameters.bounds);
     ph_part.vx = 0;
     ph_part.vy = 0;
     ph_part.mass = mass;
+    ph_part.id = next_id;
     particles.push_back(ph_part);
 }
 void ParticleSimulation::addParticle(float mass, float posi_x, float posi_y) {
+    int next_id = particles.size();
     Particle ph_part;
     ph_part.x = posi_x;
     ph_part.y = posi_y;
     ph_part.vx = 0;
     ph_part.vy = 0;
     ph_part.mass = mass;
+    ph_part.id = next_id;
     particles.push_back(ph_part);
 }
 
@@ -121,11 +127,9 @@ void ParticleSimulation::createClusters() {
             ph_cluster.mean_y = particles[ph_ints[i]].y; 
             ph_clusters.push_back(ph_cluster);
         }
-        if(parameters.clusterAlgorithm == ClusteringType::k_means){
-            optimizeClusters_kmeans(ph_clusters);
-        } else if(parameters.clusterAlgorithm == ClusteringType::fuzzy_k_means){
-            optimizeClusters_FKM(ph_clusters);
-        }
+        if(parameters.clusterAlgorithm == ClusteringType::custom_0){ optimizeClusters_custom(ph_clusters); }
+        else if(parameters.clusterAlgorithm == ClusteringType::k_means){ optimizeClusters_kmeans(ph_clusters); }
+        else if(parameters.clusterAlgorithm == ClusteringType::fuzzy_k_means){ optimizeClusters_FKM(ph_clusters); }
         
         /*  setting first converged clusters as clusters
             comparing new iteration to current saved configuration
@@ -160,6 +164,32 @@ void ParticleSimulation::createClusters() {
     //    for(auto cl_vec:ph_clusters){ for(auto cl_ptr:cl_vec.particles){ delete cl_ptr; } }
         ph_clusters.clear();
     } // end for loop
+}
+void ParticleSimulation::optimizeClusters_custom(std::vector<Cluster>& clusterVec) {
+    /*  replaced top two lines into cluster struct
+        ordered map<id, index>  
+
+    */
+//    std::map<int, float[]> memberships;
+//    float ph_objFunc[clusters.size()];
+    for(int n = 0; n < particles.size(); n++){
+        for(int g = 0; g < clusters.size(); g++){
+            float objSum = 0.0f;
+            float weight_x = 1 - (std::abs(particles[n].x - clusters[g].mean_x)/(parameters.width*parameters.bounds));
+            float weight_y = 1 - (std::abs(particles[n].y - clusters[g].mean_x)/(parameters.height*parameters.bounds));
+            float weight_vx = 1 - (std::abs(particles[n].vx - clusters[g].vx)/(parameters.width/parameters.timeScale));
+            float weight_vy = 1 - (std::abs(particles[n].vy - clusters[g].vy)/(parameters.height/parameters.timeScale));
+            float weight_dist = weight_x*weight_y;
+            float weight_velo = weight_vx*weight_vy;
+            objSum += weight_dist*(particles[n].x-clusters[g].mean_x)*(particles[n].x-clusters[g].mean_x);
+            objSum += weight_dist*(particles[n].y-clusters[g].mean_y)*(particles[n].y-clusters[g].mean_y);
+            objSum += weight_velo*(particles[n].vx-clusters[g].vx)*(particles[n].vx-clusters[g].vx);
+            objSum += weight_velo*(particles[n].vy-clusters[g].vy)*(particles[n].vy-clusters[g].vy);
+//            memberships[g] = float[clusters.size()];
+//            ph_objFunc[g] = objSum;
+        }
+//        memberships[n] = ph_objFunc;
+    }
 }
 void ParticleSimulation::optimizeClusters_kmeans(std::vector<Cluster>& clusterVec) {
     /*  has the objective function target change for convergence
@@ -223,7 +253,39 @@ void ParticleSimulation::createDirectories() {
     std::filesystem::create_directory("./frames/");
     std::filesystem::create_directory("./sims/");
 }
-void ParticleSimulation::runSim() {}
+void ParticleSimulation::runSim() {
+    /*  Creates the directories in the directory where program was executed from,
+        adds all the particles, random positions and mass within parameter ranges
+        creates the clusters and tests different starts
+            createClusters() also optimizes based off parameters.clusterAlgorithm 
+    */
+    createDirectories();
+    addParticle(parameters.particleCount);
+    createClusters();
+
+    /*  loop for running the sim
+        calculations, steps, rendering/saving frames
+    */
+    for(int i = 0; i < parameters.steps; i++){
+        calculateForcesCluster();
+        calculateForcesParticle();
+        stepCluster();
+        stepParticle();
+        renderStep();
+        saveFrame(i);
+    // add a function to optimize mminimally,(not full recalculation)
+    }
+
+    /*  creates and gets the next file_id
+        compiles the video to fileID.mp4 with fileID
+        saves the parameters to fileID_info.txt with the same fileID
+        then clears the frames directory to be ready for the next sim
+    */
+    std::string file_id = getFilenameID();
+    compileVideo(file_id);
+    saveParameters(file_id);
+    clearFrames();
+}
 void ParticleSimulation::calculateForcesCluster() {}
 void ParticleSimulation::calculateForcesParticle() {}
 void ParticleSimulation::stepCluster() {}
