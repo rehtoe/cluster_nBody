@@ -1,13 +1,15 @@
 #include <vector>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <bits/stdc++.h>
 #include <random>
 #include <algorithm>
 #include <string> 
+#include <iostream>
 #include <fstream>
 #include <sstream>
 #include <map>
-#include <iostream>
 #include <format>
 
 /* debugging function */
@@ -235,6 +237,8 @@ class ParticleSimulation{
     void saveParameters(std::string fileID);
     void loadParameters(std::string fileID);
     void clearFrames();
+
+    void pythonPlot(); 
 
     private:
 };

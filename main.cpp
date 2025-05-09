@@ -103,5 +103,8 @@ int main(){
         else{ std::cout << g << ", "; }
     }
 
+    /* plots data after optimzation */
+    sim.pythonPlot();
+
     return 0;
 }

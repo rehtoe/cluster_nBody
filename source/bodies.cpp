@@ -446,3 +446,70 @@ void ParticleSimulation::clearFrames() {
         std::filesystem::remove(entry.path());
     }
 }
+
+void ParticleSimulation::pythonPlot(){
+    /* creates a filename
+        opens a file stream
+        creates imports for matplotlib and the lists. */
+    std::string pythonFilename = "clusterPlot.py";
+    std::ofstream py_script(pythonFilename);
+    py_script   << "import matplotlib.pyplot as plt\n"
+                << "x_list = []\n"
+                << "y_list = []\n"
+                << "g_list = []\n";
+    /* passing the data from C++ to Python lists */
+    for(auto [g, cluster]:clusters){
+        for(auto [id, index]:cluster.particle_ID_membership){
+            py_script   << "x_list.append(" << particles[id].x << ")\n"
+                        << "y_list.append(" << particles[id].y << ")\n"
+                        << "g_list.append(" << g << ")\n";
+        }
+        py_script   << "print(len(x_list))\n"
+                    << "print(len(y_list))\n"
+                    << "print(len(g_list))\n";
+    }
+    py_script   << "print(x_list[500:])\n"
+                << "print(y_list[500:])\n"
+                << "print(g_list[500:])\n";
+    /* creating the plot in python */
+    py_script   << "colors = plt.get_cmap('viridis', len(set(g_list)))\n"
+                << "plt.scatter(x_list, y_list, c=g_list, cmap=colors, alpha=0.7)\n"
+                << "plt.colorbar(label='Cluster')\n"  // Optional colorbar
+                << "plt.xlabel('X Axis')\n"
+                << "plt.ylabel('Y Axis')\n"
+                << "plt.xlim(" << 0 << ", " << parameters.width*parameters.bounds << ")\n"
+                << "plt.ylim(" << 0 << ", " << parameters.height*parameters.bounds << ")\n"
+                << "plt.title('Grouped Scatter Plot')\n"
+                << "plt.savefig('bin/cluster_output.png')\n"
+                << "plt.close()\n"
+                << "#plt.show()\n";
+    py_script.close();
+    /* uses a virtual environment inside the working directory */
+    std::string pythonVenv= "envPlot";
+    std::string venvCommand;
+    std::string exitVenv = "deactivate";
+    if(!fs::exists(pythonVenv)){
+        std::string createVenv = "python -m venv " + pythonVenv;
+        std::string enterVenv = "source " + pythonVenv + "/bin/activate";
+        std::string upgradePip = "pip install --upgrade pip";
+        std::string downloadMPL = "pip install matplotlib";
+        venvCommand = createVenv + enterVenv + upgradePip + downloadMPL;
+    } else{
+        std::string enterVenv = "source " + pythonVenv + "/bin/activate";
+        venvCommand = enterVenv;
+    }
+    /*  remove file if it exists
+        run the virtual environment command. */
+    remove("bin/cluster_output.png");
+    system(venvCommand.c_str());
+    /* for script: create command, run command */
+    std::string command = "python " + pythonFilename;
+    system(command.c_str());
+    /* leave python virtual environment */
+    system(exitVenv.c_str());
+    /* deleting python file */
+    remove(pythonFilename.c_str());
+    /* open image made by python file */
+    system("xdg-open bin/cluster_output.png");
+
+}
