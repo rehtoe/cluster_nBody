@@ -1,7 +1,10 @@
 #include "bodies.h"
 
-/* debugging function to make it easier */
-
+/*  debugging function to make it easier 
+    function goes to a certain row in the terminal
+    clears the printed line at said row
+    outputs message passed as 'line' parameter
+*/
 void clearLinePrint(int row, std::string line){
     std::string clearLineStart = "\033[" + std::to_string(row) + "H\033[2K\r";
     std::cout << clearLineStart << line;
@@ -12,7 +15,7 @@ void clearLinePrint(int row, std::string line, bool newLine){
     if(newLine){ std::cout << std::endl; }
 }
 
-/* Random generators */
+/* Random Number Generators */
 
 float getRandomFloat(float min, float max) {
     static std::random_device rd;  // Seed (only once)
@@ -46,28 +49,11 @@ float Cluster::inertia(){
     }
     return sum;
 }
-/*
-void Cluster::addParticle(Particle& refParticle){
-    /* uses hasParticle to check if reference exists //
-    if(!hasParticle(refParticle)){ particle_ID_membership[refParticle.id] = refParticle; }
-}
-*/
 bool Cluster::hasParticle(Particle& refParticle){
     /*  uses std::find to get an iterator to the reference in question
         then return it, if no reference is found it returns vector<>.end() */
     return particle_ID_membership.count(refParticle.id);
 }
-/*
-void Cluster::remParticle(Particle& refParticle){ 
-    /*  uses hasParticle to find iterator
-        if particle exists shift it to the end and remove it from the array/vector  
-    //
-    if(!hasParticle(refParticle)){ return; }
-    else{
-        particle_ID_membership.erase(refParticle.id);
-    }
-}
-*/
 bool Cluster::inBounds(Particle& refParticle){
     float dx = mean_x-refParticle.x;
     float dy = mean_y-refParticle.y;
@@ -124,7 +110,7 @@ void ParticleSimulation::createClusters() {
     Cluster::simulationParticles = &particles;
     std::map<int,Cluster> ph_clusters;
     for(int starts = 0; starts < parameters.clusterStarts; starts++){
-        clearLinePrint(2, "Start " + std::to_string(starts), true);
+        clearLinePrint(2, "Start " + std::to_string(starts + 1), true);
         /*  use the random floats function to generate potential indexes
             converts them into ints and puts them into a vector
         */
@@ -190,10 +176,18 @@ void ParticleSimulation::createClusters() {
     } // end for loop
 }
 void ParticleSimulation::optimizeClusters_custom(std::map<int, Cluster>& clusterMap) {
-    /*  replaced top two lines into cluster struct
-        ordered map<id, index>  
+    /*  yet to finish code */
+
+    /*  objective function values
+        sets up an iteration variable and loop for optimization
     */
-    float objectiveCurrent = 0.0f, objectivePrevious = 0.0f;
+    double objective_target = 1.0e-4, objective_prev = 1928374650.0, objective_curr = 0.0;
+    int iters = 0;
+    while(iters < parameters.clusterStartIterations){
+
+    }
+
+    /* previou progress/ ideas */
     for(auto &[partID, parti]:particles){
         float objectiveValues[clusters.size()];
         for(int g = 0; g < clusters.size(); g++){
@@ -224,8 +218,8 @@ void ParticleSimulation::optimizeClusters_kmeans(std::map<int, Cluster>& cluster
         max iterations to run is the integer in the while loop */
     double objective_target = 1.0e-4, objective_prev = 1928374650.0, objective_curr = 0.0;
     int iters = 0;
-    while(iters < 100){
-        clearLinePrint(3, "Iteration " + std::to_string(iters), true);
+    while(iters < parameters.clusterStartIterations){
+        clearLinePrint(3, "Iteration " + std::to_string(iters + 1), true);
         /*  iterates over every particle in the ParticleSimulation
             makes a float array for distances to each cluster(same order)
             keeps track of the current 'i' and the 'smallest' distance indexes */
@@ -236,7 +230,7 @@ void ParticleSimulation::optimizeClusters_kmeans(std::map<int, Cluster>& cluster
             /*  calculates the distance from the particle to EVERY cluster mean
                 saves the index of the cluster in which the particle is closes to */
             for (int i = 0; i < clusterMap.size(); i++) {
-                clearLinePrint(4, "Calculation: Particle  " + std::to_string(id) + ", Cluster " + std::to_string(i), true);
+                clearLinePrint(4, "Calculation: Particle ID " + std::to_string(id) + ", Cluster # " + std::to_string(i), true);
                 float dx_ = clusterMap[i].mean_x - parti.x;
                 float dy_ = clusterMap[i].mean_y - parti.y;
                 ph_dist = dx_*dx_ + dy_*dy_;
@@ -260,7 +254,7 @@ void ParticleSimulation::optimizeClusters_kmeans(std::map<int, Cluster>& cluster
             if (clstr.particle_ID_membership.empty()){ continue; }
             float new_x = 0.0, new_y = 0.0;
             for(auto &[id, member]:clstr.particle_ID_membership){
-                clearLinePrint(5,"Update: Cluster " + std::to_string(g) + ", Particle " + std::to_string(id), true);
+                clearLinePrint(5,"Update: Cluster " + std::to_string(g) + ", Particle ID " + std::to_string(id), true);
                 new_x += member*clstr.simulationParticles->at(id).x;
                 new_y += member*clstr.simulationParticles->at(id).y;
             }

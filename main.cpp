@@ -50,6 +50,7 @@ int main(){
     }
     std::cout << std::endl;
 */
+    /*  Simulation Parameters setup */
     SimulationParams _params;
     _params.clusterAlgorithm = ClusteringType::k_means;
     _params.particleCount = 500;
@@ -70,8 +71,10 @@ int main(){
     _params.maxForce = 1000.0f;
     _params.softening = 10.0f;
 
+    /* Simulation object */
     ParticleSimulation sim(_params);
 
+    /* Simulation setup */
     sim.createDirectories();
     sim.addParticle(sim.parameters.particleCount);
     sim.createClusters();
@@ -85,12 +88,15 @@ int main(){
             sim.optimizeClusters_FKM(sim.clusters); break;
     }
 
+    /* save all particle memberships(cluster #) in ascending order */
     std::map<int, int> pID_cG;
     for(auto [g, cluster]:sim.clusters){
         for(auto [id, particle]:cluster.particle_ID_membership){
             pID_cG[id] = g;
         }
     }
+    
+    /* print out all article memberships(cluster #) in ascending order */
     int iii = 0;
     for(auto [id, g]:pID_cG){ 
         if(iii++ == 49){ std::cout << g << std::endl; iii = 0; }

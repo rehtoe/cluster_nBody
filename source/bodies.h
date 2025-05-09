@@ -133,6 +133,7 @@ struct SimulationParams{
     int particleCount = 500;
     int clusterCount = 4;
     int clusterStarts = 25;
+    int clusterStartIterations = 100;
     int steps = 300;
     float timeScale = 1.0f;
     int fps = 30;
