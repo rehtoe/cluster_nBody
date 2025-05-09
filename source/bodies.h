@@ -7,7 +7,13 @@
 #include <fstream>
 #include <sstream>
 #include <map>
-#include <unordered_map>
+#include <iostream>
+#include <format>
+
+/* debugging function */
+
+void clearLinePrint(int row, std::string line);
+void clearLinePrint(int row, std::string line, bool newLine);
 
 namespace fs = std::filesystem;
 
@@ -57,6 +63,8 @@ struct Cluster{
     remParticle:
         removes the particle if it is a member of this cluster
 */
+    static std::map<int, Particle>* simulationParticles;
+
     float mean_x;
     float mean_y;
     float cm_x;
@@ -65,15 +73,15 @@ struct Cluster{
     float vy;
     float totalMass;
     float radiusSqr;
-    std::vector<Particle*> particles;
+    std::map<int, float> particle_ID_membership;
     
     float inertia();
-    void addParticle(Particle& refParticle);
+//    void addParticle(Particle& refParticle);
     bool hasParticle(Particle& refParticle);
-    void remParticle(Particle& refParticle);
+//    void remParticle(Particle& refParticle);
     bool inBounds(Particle& refParticle);
 
-    Cluster(): mean_x(0.0f), mean_y(0.0f), cm_x(0.0f), cm_y(0.0f), vx(0.0f), vy(0.0f), totalMass(1.0f), radiusSqr(0.0f), particles(std::vector<Particle*>()) {};
+    Cluster(): mean_x(0.0f), mean_y(0.0f), cm_x(0.0f), cm_y(0.0f), vx(0.0f), vy(0.0f), totalMass(1.0f), radiusSqr(0.0f), particle_ID_membership(std::map<int, float>()) {};
 private:
 };
 
@@ -144,9 +152,10 @@ struct SimulationParams{
 class ParticleSimulation{
 /*
     particles:
-        list of particles that are in the simulation
+        dictionary of particles that are in the simulation <particle.id, Particle>
+        id should match index order created,
     clusters:
-        list of clusters that are in the simulation
+        dictionary of clusters that are in the simulation
     parameters:
         simulation parameters, steps, particle/cluster count, look at class comments.
 
@@ -195,21 +204,21 @@ class ParticleSimulation{
     clearFrames:
         deletes the frames in the working directory
 */
-    std::vector<Particle> particles;
-    std::vector<Cluster> clusters;
+    public:
+    std::map<int, Particle> particles;
+    std::map<int, Cluster> clusters;
     SimulationParams parameters;
 
-    ParticleSimulation(SimulationParams params): particles(std::vector<Particle>(params.particleCount)), 
-        clusters(std::vector<Cluster>(params.clusterCount)), parameters(params){};
+    ParticleSimulation(SimulationParams params): parameters(params){};
 
     void addParticle(int amountOf);
     void addParticle(float mass);
     void addParticle(float mass, float posi_x, float posi_y);
 
     void createClusters();
-    void optimizeClusters_custom(std::vector<Cluster>& clusterVec);
-    void optimizeClusters_kmeans(std::vector<Cluster>& clusterVec);
-    void optimizeClusters_FKM(std::vector<Cluster>& clusterVec);
+    void optimizeClusters_custom(std::map<int, Cluster>& clusterMap);
+    void optimizeClusters_kmeans(std::map<int, Cluster>& clusterMap);
+    void optimizeClusters_FKM(std::map<int, Cluster>& clusterMap);
 
     void createDirectories();
     void runSim();
