@@ -54,12 +54,13 @@ int main(){
     SimulationParams _params;
     _params.clusterAlgorithm = ClusteringType::k_means;
     _params.particleCount = 500;
-    _params.clusterCount = 4;
+    _params.clusterCount = 5;
     _params.clusterStarts = 25;
+    _params.clusterStartIterations = 100;
     _params.steps = 300;
-    _params.timeScale = 1.0f;
+    _params.timeScale = 0.5f;
     _params.fps = 30;
-    _params.gravity = 1.08*std::pow(10,1);
+    _params.gravity = 1.08*std::pow(10,1/2);
     _params.mass_lower = 1.0f;
     _params.mass_upper = 1.0f;
     _params.width = 1600.0f;
@@ -68,12 +69,12 @@ int main(){
     _params.resolutionWidth = 1920;
     _params.resolutionHeight = 1080;
     _params.pixelScale = 1.2f;
-    _params.maxForce = 1000.0f;
+    _params.maxForce = 500.0f;
     _params.softening = 10.0f;
 
     /* Simulation object */
     ParticleSimulation sim(_params);
-
+    sim.clearFrames();
     /* Simulation setup */
     sim.createDirectories();
     sim.addParticle(sim.parameters.particleCount);
@@ -104,7 +105,7 @@ int main(){
     }
 
     /* plots data after optimzation */
-    sim.pythonPlot();
+    sim.pythonPlot(-10);
 
     return 0;
 }

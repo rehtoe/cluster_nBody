@@ -64,10 +64,10 @@ bool Cluster::inBounds(Particle& refParticle){
 /* ParticleSimulation */
 
 void ParticleSimulation::addParticle(int amountOf) {
-    std::vector<float> posX = generateRandomFloats(0, parameters.width*parameters.bounds, amountOf);
-    std::vector<float> posY = generateRandomFloats(0, parameters.height*parameters.bounds, amountOf);
+    std::vector<float> posX = generateRandomFloats(0, parameters.width, amountOf);
+    std::vector<float> posY = generateRandomFloats(0, parameters.height, amountOf);
     std::vector<float> masses = generateRandomFloats(parameters.mass_lower, parameters.mass_upper, amountOf);
-    int next_id = particles.size();
+    int next_id = getNextID();
     for(int i = 0; i < amountOf; i++){
         Particle ph_part;
         ph_part.x = posX[i];
@@ -80,10 +80,10 @@ void ParticleSimulation::addParticle(int amountOf) {
     }
 }
 void ParticleSimulation::addParticle(float mass) {
-    int next_id = particles.size();
+    int next_id = getNextID();
     Particle ph_part;
-    ph_part.x = getRandomFloat(0, parameters.width*parameters.bounds);
-    ph_part.y = getRandomFloat(0, parameters.height*parameters.bounds);
+    ph_part.x = getRandomFloat(0, parameters.width);
+    ph_part.y = getRandomFloat(0, parameters.height);
     ph_part.vx = 0;
     ph_part.vy = 0;
     ph_part.mass = mass;
@@ -91,7 +91,7 @@ void ParticleSimulation::addParticle(float mass) {
     particles[next_id] = ph_part;
 }
 void ParticleSimulation::addParticle(float mass, float posi_x, float posi_y) {
-    int next_id = particles.size();
+    int next_id = getNextID();
     Particle ph_part;
     ph_part.x = posi_x;
     ph_part.y = posi_y;
@@ -105,10 +105,12 @@ void ParticleSimulation::addParticle(float mass, float posi_x, float posi_y) {
 void ParticleSimulation::createClusters() {
     /*  set the static reference to the particles map.
         create placeholder cluster map
+        objective values to know which start is more optimized
         do clusterStarts amount of different starts
     */
     Cluster::simulationParticles = &particles;
     std::map<int,Cluster> ph_clusters;
+    float objective_current = 0.0, objective_previous = std::numeric_limits<float>::max();
     for(int starts = 0; starts < parameters.clusterStarts; starts++){
         clearLinePrint(2, "Start " + std::to_string(starts + 1), true);
         /*  use the random floats function to generate potential indexes
@@ -123,7 +125,7 @@ void ParticleSimulation::createClusters() {
         */
         std::sort(ph_ints.begin(), ph_ints.end());
         for(int i = 1; i < ph_ints.size(); i++){
-            if (ph_ints[i] <= ph_ints[i-1]) {
+            if (ph_ints[i] == ph_ints[i-1]) {
                 ph_ints[i] = ph_ints[i-1] + 1;
             }
         }
@@ -135,43 +137,38 @@ void ParticleSimulation::createClusters() {
             Cluster ph_cluster;
             ph_cluster.mean_x = particles[ph_ints[i]].x; 
             ph_cluster.mean_y = particles[ph_ints[i]].y; 
-            ph_clusters[i]= ph_cluster;
+            ph_clusters[i] = ph_cluster;
         }
         if(parameters.clusterAlgorithm == ClusteringType::custom_0){ clearLinePrint(1, "Custom", true); optimizeClusters_custom(ph_clusters); }
-        else if(parameters.clusterAlgorithm == ClusteringType::k_means){ clearLinePrint(1, "K-Means", true); optimizeClusters_kmeans(ph_clusters); }
+        else if(parameters.clusterAlgorithm == ClusteringType::k_means){ clearLinePrint(1, "K-Means", true); objective_current = optimizeClusters_kmeans(ph_clusters); }
         else if(parameters.clusterAlgorithm == ClusteringType::fuzzy_k_means){ clearLinePrint(1, "Fuzzy-K-Means", true); optimizeClusters_FKM(ph_clusters); }
         
         /*  setting first converged clusters as clusters
             comparing new iteration to current saved configuration
             to check if it is more optimized
         */
-        if(starts == 0){
+        if(objective_current < objective_previous){
+            /*  free up memory of all particles in each cluster before replacing clusters 
+            Particles in Cluster struct are not owned by the struct, should not delete them.
+            this instead clears the vector to have it ready for the next iteration of the loop*/
+            clusters.clear();
             for(auto &[g, cl]:ph_clusters){
                 clusters[g] = cl;
             }
-        } else {
-            float ph_sum_curr = 0.0f;
-            float ph_sum = 0.0f;
-            for(int i = 0; i < parameters.clusterCount; i++){
-                ph_sum_curr += clusters[i].inertia();
-                ph_sum += ph_clusters[i].inertia();
-            }
-            if(ph_sum < ph_sum_curr){
-                /*  free up memory of all particles in each cluster before replacing clusters 
-                    Particles in Cluster struct are not owned by the struct, should not delete them.
-                    this instead clears the vector to have it ready for the next iteration of the loop*/
-    //            for(auto cl_vec:clusters){ for(auto cl_ptr:cl_vec.particle_ID_membership){ delete cl_ptr; } }
-                clusters.clear();
-                for(auto &[g, cl]:ph_clusters){
-                    clusters[g] = cl;
-                }
-            }
+            objective_previous = objective_current;
+            objective_current = 0;
         }
 
         /*  free up memory of all particles in ph_clusters before the next iteration of the loop 
             Particles in Cluster struct are not owned by the struct, should not delete them.
             this instead clears the vector to have it ready for the next iteration of the loop*/
-    //    for(auto cl_vec:ph_clusters){ for(auto cl_ptr:cl_vec.particle_ID_membership){ delete cl_ptr; } }
+        std::cout << "Objective Current: " << objective_current << std::endl;
+        std::cout << "Objective Previous: " << objective_previous << std::endl;
+        std::cout << ph_clusters.size() << " clusters in ph_clusters map<int, Cluster>\n";
+        for(auto &[g, cluster]:ph_clusters){
+            std::cout << g << " Cluster, (X,Y) = (" << cluster.mean_x << ","<< cluster.mean_y << ")\n";
+            std::cout << g << " Cluster, Particle Membership count: " << cluster.particle_ID_membership.size() << std::endl;
+        }
         ph_clusters.clear();
     } // end for loop
 }
@@ -212,67 +209,135 @@ void ParticleSimulation::optimizeClusters_custom(std::map<int, Cluster>& cluster
         for(auto &val:objectiveValues){ val /= objValSum; }
     }
 }
-void ParticleSimulation::optimizeClusters_kmeans(std::map<int, Cluster>& clusterMap) {
-    /*  has the objective function target change for convergence
-        placeholder intial previous value, a current value for when grouping datapoints
-        max iterations to run is the integer in the while loop */
-    double objective_target = 1.0e-4, objective_prev = 1928374650.0, objective_curr = 0.0;
+float ParticleSimulation::optimizeClusters_kmeans(std::map<int, Cluster>& clusterMap) {
+    /*  the objective function of kmeans optimizing(minimizing) the joint distance function
+        _target -> threshold for objective function
+        _prev -> previous objective function value, used for threshold checks
+        _curr -> current objective function value, used for threshold checks
+        iters -> iterations for calculations
+    */
+    float objective_target = 1.0e-2f;
+    float objective_prev = std::numeric_limits<float>::max();
+    float objective_curr = 0.0f, objective_value = 0.0f;
     int iters = 0;
-    while(iters < parameters.clusterStartIterations){
+    std::map<int, Cluster> ph_clustermap = clusterMap;
+
+    /*  loops optimization for parameters.clusterStartIterations times */
+    while (iters < parameters.clusterStartIterations && abs(objective_prev - objective_curr) > objective_target) {
         clearLinePrint(3, "Iteration " + std::to_string(iters + 1), true);
-        /*  iterates over every particle in the ParticleSimulation
-            makes a float array for distances to each cluster(same order)
-            keeps track of the current 'i' and the 'smallest' distance indexes */
-        #pragma omp parallel for reduction(+:objective_curr)
-        for(auto &[id,parti] : particles){
-            float min_dist = 192837465000.0f, ph_dist = 0.0f;
-            int closest_cluster = 0;
-            /*  calculates the distance from the particle to EVERY cluster mean
-                saves the index of the cluster in which the particle is closes to */
-            for (int i = 0; i < clusterMap.size(); i++) {
-                clearLinePrint(4, "Calculation: Particle ID " + std::to_string(id) + ", Cluster # " + std::to_string(i), true);
-                float dx_ = clusterMap[i].mean_x - parti.x;
-                float dy_ = clusterMap[i].mean_y - parti.y;
-                ph_dist = dx_*dx_ + dy_*dy_;
-                if (ph_dist < min_dist) {
-                    min_dist = ph_dist;
-                    closest_cluster = i;
+        /*  Clear current memberships, doesnt change cluster means */
+        for (auto& [g, cluster] : clusterMap) {
+            cluster.particle_ID_membership.clear();
+        }
+
+        /*  Assign particles to nearest cluster, uses kmeans joint distance function 
+            for each particle-cluster relation */
+        for (const auto &[id, particle]:particles) {
+            float min_distance = std::numeric_limits<float>::max();
+            int best_cluster = -1;
+
+            /*  Find closest cluster, smallest JDF value for this particle */
+            for (const auto &[g, cluster]:clusterMap) {
+                clearLinePrint(4, "Calculating JDF... Particle " + std::to_string(id) + ", Cluster " + std::to_string(g), true);
+                /*  Calculate JDF (position and velocity variables) */
+                float dx = particle.x - cluster.mean_x;
+                float dy = particle.y - cluster.mean_y;
+                float dvx = particle.vx - cluster.vx;
+                float dvy = particle.vy - cluster.vy;
+                /*  JDF squared for n'th particle and g'th cluster */
+                float distance_sqr = dx*dx + dy*dy + dvx*dvx + dvy*dvy;
+                // float distance = std::sqrt(distance_sqr); 
+                /*  update closest cluster index by comparing JDF values */
+                if (distance_sqr < min_distance) {
+                    min_distance = distance_sqr;
+                    best_cluster = g;
                 }
             }
-            //std::cout << std::endl;
-            /*  adds the particle to the cluster mean it is closest to
-                calculates and adds the objective value(distance squared) of the current iteration setup */
-        //    clusterMap[closest_cluster].addParticle(parti);
-            clusterMap[closest_cluster].particle_ID_membership[id] = 1.0f;
-            objective_curr += min_dist;
-            clusterMap[closest_cluster].radiusSqr = std::max(clusterMap[closest_cluster].radiusSqr, min_dist);
+
+            // Assign particle membership to cluster
+            clusterMap[best_cluster].particle_ID_membership[id] = 1.0f;
+            objective_curr += min_distance;
         }
-        /*  changes the means of the clusters based on the particles it contains
-            averages all the x values and y values of all particles
-            sets cluster's mean to the same cluster */
-        for(auto &[g, clstr]:clusterMap){
-            if (clstr.particle_ID_membership.empty()){ continue; }
-            float new_x = 0.0, new_y = 0.0;
-            for(auto &[id, member]:clstr.particle_ID_membership){
-                clearLinePrint(5,"Update: Cluster " + std::to_string(g) + ", Particle ID " + std::to_string(id), true);
-                new_x += member*clstr.simulationParticles->at(id).x;
-                new_y += member*clstr.simulationParticles->at(id).y;
+
+        // Update cluster mean position and velocity
+        for (auto &[g, cluster]:clusterMap) {
+            // Keep current means if no particles assigned
+            if (cluster.particle_ID_membership.empty()) { continue; }
+            // intialize reference variables to find clusters' mean_x, mean_y, vx, vy
+            float sum_x = 0.0f, sum_y = 0.0f;
+            float sum_vx = 0.0f, sum_vy = 0.0f;
+            int count = 0;
+            // sum particles in clusters based off their membership(k means, 0 or 1 so no 'variable*member' need)
+            for (const auto& [id, member] : cluster.particle_ID_membership) {
+                // Only consider members with membership > 0
+                if (member > 0.0f) {
+                    sum_x += particles.at(id).x;
+                    sum_y += particles.at(id).y;
+                    sum_vx += particles.at(id).vx;
+                    sum_vy += particles.at(id).vy;
+                    count++;
+                }
             }
-            clstr.mean_x = new_x/clstr.particle_ID_membership.size();
-            clstr.mean_y = new_y/clstr.particle_ID_membership.size();
+
+            if (count > 0) {
+                cluster.mean_x = sum_x / count;
+                cluster.mean_y = sum_y / count;
+                cluster.vx = sum_vx / count;
+                cluster.vy = sum_vy / count;
+            }
         }
-        std::cout << std::endl;
-        /*  uses calculated objective value to compare it to the previous
-            when under the threshhold of objective_target breaks out of the loop
-            if it has not passed the theshold then set the previous value to the recent value
-            and reset the next value for the next optimization.
-            iterations goes up to count how many */
-        if(abs(objective_curr-objective_prev) < objective_target){ break; }
-        else{ objective_prev = objective_curr; objective_curr = 0.0; }
+        // update objective function values for new means
+        objective_curr = 0.0f;
+        for(const auto &[id,particle]:particles){
+            for(const auto &[g,cluster]:clusterMap){
+                float dx = particle.x - cluster.mean_x;
+                float dy = particle.y - cluster.mean_y;
+                float dvx = particle.vx - cluster.vx;
+                float dvy = particle.vy - cluster.vy;
+                // distance function squared
+                float distance_sqr = dx*dx + dy*dy + dvx*dvx + dvy*dvy;
+                objective_curr += distance_sqr;
+            }
+        }
+        /*  if threshold is not crossed
+            setup objective placeholder values for next iteration */
+        objective_value = objective_curr;
+        objective_curr = 0.0;
+        objective_prev = objective_value;
+
         iters++;
     }
+    return objective_value;
 }
 void ParticleSimulation::optimizeClusters_FKM(std::map<int, Cluster>& clusterMap) {}
+void ParticleSimulation::calculateClusterMass(std::map<int, Cluster>& clusterMap){
+    for(auto &[g,cluster]:clusters){
+        cluster.totalMass = 0;
+        for (auto &[id, membership]:cluster.particle_ID_membership){
+            cluster.totalMass += particles.at(id).mass*membership;
+            cluster.cm_x += particles.at(id).x*particles.at(id).mass*membership;
+            cluster.cm_y += particles.at(id).y*particles.at(id).mass*membership;
+        }
+        cluster.cm_x /= cluster.totalMass;
+        cluster.cm_y /= cluster.totalMass;
+    }
+}
+
+float ParticleSimulation::objective_kmeans(std::map<int, Cluster>& clusterMap){
+    float objective_value = 0.0;
+    for(const auto &[id,particle]:particles){
+        for(const auto &[g,cluster]:clusterMap){
+            float dx = particle.x - cluster.mean_x;
+            float dy = particle.y - cluster.mean_y;
+            float dvx = particle.vx - cluster.vx;
+            float dvy = particle.vy - cluster.vy;
+            // distance function squared
+            float distance_sqr = dx*dx + dy*dy + dvx*dvx + dvy*dvy;
+            objective_value += distance_sqr;
+        }
+    }
+    return objective_value;
+}
 
 void ParticleSimulation::createDirectories() {
     /*  frames:
@@ -292,6 +357,7 @@ void ParticleSimulation::runSim() {
     createDirectories();
     addParticle(parameters.particleCount);
     createClusters();
+    /* 
     switch(parameters.clusterAlgorithm){
         default:
         case ClusteringType::custom_0:
@@ -300,18 +366,33 @@ void ParticleSimulation::runSim() {
             optimizeClusters_kmeans(clusters); break;
         case ClusteringType::fuzzy_k_means:
             optimizeClusters_FKM(clusters); break;
-    }
+    }   */
 
-    /*  loop for running the sim
+    /*  create reference start frame
+        loop for running the sim
         calculations, steps, rendering/saving frames
     */
+    pythonPlot(-1);
+    #pragma omp parallel for schedule(dynamic) 
     for(int i = 0; i < parameters.steps; i++){
+        clearLinePrint(1, "Step " + std::to_string(i), true);
+        switch(parameters.clusterAlgorithm){
+            default:
+            case ClusteringType::custom_0:
+                optimizeClusters_custom(clusters); break;
+            case ClusteringType::k_means:
+                optimizeClusters_kmeans(clusters); break;
+            case ClusteringType::fuzzy_k_means:
+                optimizeClusters_FKM(clusters); break;
+        }
+        calculateClusterMass(clusters);
         calculateForcesCluster();
         calculateForcesParticle();
         stepCluster();
         stepParticle();
-        renderStep();
-        saveFrame(i);
+        pythonPlot(i);
+        /*renderStep();
+        saveFrame(i);*/
     // add a function to optimize mminimally,(not full recalculation)
     }
 
@@ -323,15 +404,143 @@ void ParticleSimulation::runSim() {
     std::string file_id = getFilenameID();
     compileVideo(file_id);
     saveParameters(file_id);
-    clearFrames();
+    //  testing for initial start up, manual call until publish
+    //  clearFrames();
 }
-void ParticleSimulation::calculateForcesCluster() {}
-void ParticleSimulation::calculateForcesParticle() {}
-void ParticleSimulation::stepCluster() {}
-void ParticleSimulation::stepParticle() {}
+void ParticleSimulation::calculateForcesCluster() {
+    /*  update each cluster's total mass based off membership 
+        and change their center of mass */
+    for(auto &[g,cluster]:clusters){
+        if(cluster.totalMass == 0){
+            for (auto &[id, membership]:cluster.particle_ID_membership){
+                cluster.totalMass += particles.at(id).mass*membership;
+                cluster.cm_x += particles.at(id).x*particles.at(id).mass*membership;
+                cluster.cm_y += particles.at(id).y*particles.at(id).mass*membership;
+            }
+            cluster.cm_x /= cluster.totalMass;
+            cluster.cm_y /= cluster.totalMass;
+        }
+    }
+    /*  loop over each cluster to set each of its velocities proportional to forces acting upon it */
+    for(auto &[g, cluster]:clusters){
+        for(auto &[g2, cluster2]:clusters){
+            /*  calculate unique pairs once, 1 2 is same as 2 1 */
+            if(g >= g2){ continue; }
+            else{ // (g < g2)
+                /*  previous velocities before calculation for vf = vo + at */
+                float vx01 = cluster.vx;
+                float vy01 = cluster.vy;
+                float vx02 = cluster2.vx;
+                float vy02 = cluster2.vy;
+                /*  calculate dx and dy cluster1(curr calc) -> cluster2 
+                    calculate distance sqrd */
+                float dx = cluster2.cm_x - cluster.cm_x;
+                float dy = cluster2.cm_y - cluster.cm_y;
+                float dsqrd = dx*dx + dy*dy;
+                /*  ratios to know what % of force is x and y */
+                float dxratio = dx/dsqrd;
+                float dyratio = dy/dsqrd;
+                /*  for extremely close centers or particles
+                    calculates dist after softening/buffer */
+                dsqrd += parameters.softening*parameters.softening;
+                float d = std::sqrt(dsqrd);
+                /*  force of gravity between both
+                    fg = G* m1m2/d^2
+                    (Nm^2/kg^2) * (kg^2/m^2) = N = kg*m/s^2 */
+                float Fg = (parameters.gravity)*(cluster.totalMass)*(cluster2.totalMass) / (dsqrd);
+                /*  calculates % of forces
+                    current object is positive/ the origin
+                    the other object experiences an equal and opposite(-) force
+                    N * (m/m) = N */
+                float fx = Fg * dxratio;
+                float fy = Fg * dyratio;
+                /*  cluster was the current so it was (0,0)
+                    cluster 2 has opposite force so - */
+                cluster.vx += (fx/cluster.totalMass);
+                cluster.vy += (fy/cluster.totalMass);
+                cluster2.vx += ((-fx)/cluster2.totalMass);
+                cluster2.vy += ((-fy)/cluster2.totalMass);
+            }
+        }
+    }
+}
+void ParticleSimulation::calculateForcesParticle() {
+    /*  update each cluster's total mass based off membership 
+        and center of mass */
+    for(auto &[g,cluster]:clusters){
+        for (auto &[id, membership]:cluster.particle_ID_membership){
+            /*  previous values for v0, vf = v0 + at */
+            /*  de-biasing clusters by removing the given particle's values from cluster */
+            float refTotalMass = cluster.totalMass - (particles.at(id).mass*membership);
+            float refCMx = cluster.cm_x - (particles.at(id).mass*particles.at(id).x*membership/cluster.totalMass);
+            float refCMy = cluster.cm_y - (particles.at(id).mass*particles.at(id).y*membership/cluster.totalMass);
+            refCMx *= cluster.totalMass/refTotalMass;
+            refCMy *= cluster.totalMass/refTotalMass;
+            
+            /*  distances between points particle -> Cluster */
+            float dx = refCMx - particles.at(id).x;
+            float dy = refCMy - particles.at(id).y;
+            float distSqrd = dx*dx + dy*dy;
+            /*  for extremely close centers or particles */
+            distSqrd += parameters.softening*parameters.softening;
+            float dist = std::sqrt(distSqrd);
 
-void ParticleSimulation::renderStep() {}
-void ParticleSimulation::saveFrame(int frameNumber) {}
+            /*  force of gravity between particles and de-biased cluster */
+            float force = (parameters.gravity)*(refTotalMass)*(particles.at(id).mass) / (distSqrd);
+            float fx = force * dx/dist;
+            float fy = force * dy/dist;
+            particles.at(id).vx += (fx/particles.at(id).mass);
+            particles.at(id).vy += (fy/particles.at(id).mass);
+        }
+    }
+}
+void ParticleSimulation::stepCluster() {
+    for(auto &[g, cluster]:clusters){
+        /*  moves center of mass and mean of the cluster a velocity*timestep
+            the movement is internal to each cluster
+            hence being allowed to move mean and cm 
+            multiply by parameters.timeScale since that was NOT done in the calculations */
+        float pos_x_change = cluster.vx * parameters.timeScale;
+        float pos_y_change = cluster.vy * parameters.timeScale;
+        cluster.mean_x += pos_x_change;
+        cluster.mean_y += pos_y_change;
+        cluster.cm_x += pos_x_change;
+        cluster.cm_y += pos_y_change;
+        for(auto &[id, membership]:cluster.particle_ID_membership){
+            /*  moves all particles by the same amount for the cluster */
+            particles.at(id).x += pos_x_change;
+            particles.at(id).y += pos_y_change;
+        }
+    }
+}
+void ParticleSimulation::stepParticle() {
+    for(auto &[g, cluster]:clusters){
+        for(auto &[id, membership]:cluster.particle_ID_membership){
+            /*  moves all particles by a timestep per its velocity */
+            particles.at(id).x = particles.at(id).vx * parameters.timeScale;
+            particles.at(id).y = particles.at(id).vy * parameters.timeScale;
+        }
+    }
+}
+
+// void ParticleSimulation::renderStep() {}
+// void ParticleSimulation::saveFrame(int frameNumber) {}
+void ParticleSimulation::renderStep() {
+    float scaleWidth = parameters.resolutionWidth/parameters.width;
+    float scaleHeight = parameters.resolutionHeight/parameters.height;
+    /*
+    for(const auto &[g,Cluster]:clusters){
+        for(const auto &[id, member]:Cluster.particle_ID_membership){
+            Particle ph_part = particles[id];
+            renderer.setPixel(ph_part.x*scaleWidth, ph_part.y*scaleHeight, ph_part.red, ph_part.green, ph_part.blue);
+        }
+    }
+    renderer.render();*/
+}
+
+void ParticleSimulation::saveFrame(int frameNumber) {
+   
+}
 std::string ParticleSimulation::getFilenameID() {
     /*  setup an initial #0 simulation 
         for each either [mp4 | txt] checks each one to get highest ID
@@ -375,6 +584,7 @@ void ParticleSimulation::saveParameters(std::string fileID) {
     variable_map["particleCount"] = std::to_string(parameters.particleCount);
     variable_map["clusterCount"] = std::to_string(parameters.clusterCount);
     variable_map["clusterStarts"] = std::to_string(parameters.clusterStarts);
+    variable_map["clusterStartIterations"] = std::to_string(parameters.clusterStartIterations);
     variable_map["steps"] = std::to_string(parameters.steps);
     variable_map["timeScale"] = std::to_string(parameters.timeScale);
     variable_map["fps"] = std::to_string(parameters.fps);
@@ -422,6 +632,7 @@ void ParticleSimulation::loadParameters(std::string fileID) {
     parameters.particleCount = std::stoi(variable_map["particleCount"]);
     parameters.clusterCount = std::stoi(variable_map["clusterCount"]);
     parameters.clusterStarts = std::stoi(variable_map["clusterStarts"]);
+    parameters.clusterStartIterations = std::stoi(variable_map["clusterStartIterations"]);
     parameters.steps = std::stoi(variable_map["steps"]);
     parameters.timeScale = std::stof(variable_map["timeScale"]);
     parameters.fps = std::stoi(variable_map["fps"]);
@@ -447,22 +658,29 @@ void ParticleSimulation::clearFrames() {
     }
 }
 
-void ParticleSimulation::pythonPlot(){
+int ParticleSimulation::getNextID(){
+    int ph_id = particles.size();
+    while(particles.count(ph_id)){ ph_id++; }
+    return ph_id;
+}
+void ParticleSimulation::pythonPlot(int next_frame_id){
     /* creates a filename
         opens a file stream
         creates imports for matplotlib and the lists. */
-    std::string pythonFilename = "clusterPlot.py";
+    std::string pythonFilename = "clusterPlot_";
+    pythonFilename +=  std::to_string(next_frame_id) + ".py";
     std::ofstream py_script(pythonFilename);
     py_script   << "import matplotlib.pyplot as plt\n"
+                << "import math\n"
                 << "x_list = []\n"
                 << "y_list = []\n"
                 << "g_list = []\n";
     /* passing the data from C++ to Python lists */
     for(auto [g, cluster]:clusters){
         for(auto [id, index]:cluster.particle_ID_membership){
-            py_script   << "x_list.append(" << particles[id].x << ")\n"
-                        << "y_list.append(" << particles[id].y << ")\n"
-                        << "g_list.append(" << g << ")\n";
+            py_script   << "x_list.append(" << std::to_string(particles[id].x) << ")\n"
+                        << "y_list.append(" << std::to_string(particles[id].y) << ")\n"
+                        << "g_list.append(" << std::to_string(g) << ")\n";
         }
         py_script   << "print(len(x_list))\n"
                     << "print(len(y_list))\n"
@@ -472,19 +690,22 @@ void ParticleSimulation::pythonPlot(){
                 << "print(y_list[500:])\n"
                 << "print(g_list[500:])\n";
     /* creating the plot in python */
-    py_script   << "colors = plt.get_cmap('viridis', len(set(g_list)))\n"
+    py_script   << "plt.figure(figsize=(16, 9))\n"
+                << "colors = plt.get_cmap('viridis', len(set(g_list)))\n"
                 << "plt.scatter(x_list, y_list, c=g_list, cmap=colors, alpha=0.7)\n"
-                << "plt.colorbar(label='Cluster')\n"  // Optional colorbar
+                //<< "plt.colorbar(label='Cluster')\n"  // Optional colorbar
                 << "plt.xlabel('X Axis')\n"
                 << "plt.ylabel('Y Axis')\n"
                 << "plt.xlim(" << 0 << ", " << parameters.width*parameters.bounds << ")\n"
                 << "plt.ylim(" << 0 << ", " << parameters.height*parameters.bounds << ")\n"
                 << "plt.title('Grouped Scatter Plot')\n"
-                << "plt.savefig('bin/cluster_output.png')\n"
+                << "plt.savefig('frames/"+std::to_string(next_frame_id)+".png')\n"
                 << "plt.close()\n"
                 << "#plt.show()\n";
     py_script.close();
     /* uses a virtual environment inside the working directory */
+    /* doesnt work yet
+
     std::string pythonVenv= "envPlot";
     std::string venvCommand;
     std::string exitVenv = "deactivate";
@@ -498,18 +719,20 @@ void ParticleSimulation::pythonPlot(){
         std::string enterVenv = "source " + pythonVenv + "/bin/activate";
         venvCommand = enterVenv;
     }
+    */
     /*  remove file if it exists
         run the virtual environment command. */
-    remove("bin/cluster_output.png");
-    system(venvCommand.c_str());
+  //  remove("bin/"+std::to_string(next_frame_id)+".png");
+  //  system(venvCommand.c_str());
+    
     /* for script: create command, run command */
     std::string command = "python " + pythonFilename;
     system(command.c_str());
     /* leave python virtual environment */
-    system(exitVenv.c_str());
+  //  system(exitVenv.c_str());
     /* deleting python file */
     remove(pythonFilename.c_str());
     /* open image made by python file */
-    system("xdg-open bin/cluster_output.png");
+  //  system("xdg-open bin/cluster_output.png");
 
 }

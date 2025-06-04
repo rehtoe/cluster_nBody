@@ -1,3 +1,9 @@
+/.gitignore
 /bin
 /compile_project.sh
 /run
+/source/render.cpp
+/source/render.h
+/source/n_vector.cpp
+/source/n_vector.h
+/frames/*
